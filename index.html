@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePOST - A Safe Social Media Platform</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .clay-morphism {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            box-shadow: 
+                12px 12px 20px rgba(0, 0, 0, 0.1),
+                -12px -12px 20px rgba(255, 255, 255, 0.5),
+                inset 2px 2px 5px rgba(255, 255, 255, 0.2),
+                inset -2px -2px 5px rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(5px);
+        }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="app" class="p-4">
+        <!-- Auth Container -->
+        <div v-if="!isLoggedIn" class="max-w-md mx-auto mt-10">
+            <div class="clay-morphism p-8">
+                <h1 class="text-3xl font-bold text-center mb-6 text-blue-600">SafePOST</h1>
+                <div class="space-y-4">
+                    <div v-if="!isRegistering">
+                        <!-- Login Form -->
+                        <h2 class="text-2xl font-semibold mb-4">Login</h2>
+                        <input type="email" v-model="loginForm.email" placeholder="Email" class="w-full p-3 rounded-lg mb-3 border">
+                        <input type="password" v-model="loginForm.password" placeholder="Password" class="w-full p-3 rounded-lg mb-3 border">
+                        <button @click="login" class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 clay-morphism">
+                            Login
+                        </button>
+                        <p class="text-center mt-4">
+                            Don't have an account? 
+                            <a href="#" @click="isRegistering = true" class="text-blue-500">Register</a>
+                        </p>
+                    </div>
+                    <div v-else>
+                        <!-- Register Form -->
+                        <h2 class="text-2xl font-semibold mb-4">Register</h2>
+                        <input type="text" v-model="registerForm.username" placeholder="Username" class="w-full p-3 rounded-lg mb-3 border">
+                        <input type="email" v-model="registerForm.email" placeholder="Email" class="w-full p-3 rounded-lg mb-3 border">
+                        <input type="password" v-model="registerForm.password" placeholder="Password" class="w-full p-3 rounded-lg mb-3 border">
+                        <button @click="register" class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 clay-morphism">
+                            Register
+                        </button>
+                        <p class="text-center mt-4">
+                            Already have an account? 
+                            <a href="#" @click="isRegistering = false" class="text-blue-500">Login</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App Container -->
+        <div v-else class="max-w-4xl mx-auto">
+            <!-- Navigation -->
+            <nav class="clay-morphism p-4 mb-6 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-blue-600">SafePOST</h1>
+                <div class="flex items-center space-x-4">
+                    <button @click="showCreatePost = true" class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="bi bi-plus-circle text-xl"></i>
+                    </button>
+                    <button class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="bi bi-heart text-xl"></i>
+                    </button>
+                    <button @click="logout" class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="bi bi-box-arrow-right text-xl"></i>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Create Post Modal -->
+            <div v-if="showCreatePost" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                <div class="clay-morphism p-6 w-full max-w-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold">Create Post</h3>
+                        <button @click="showCreatePost = false" class="text-gray-500 hover:text-gray-700">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <textarea v-model="newPost.caption" placeholder="What's on your mind?" class="w-full p-3 rounded-lg mb-3 border h-32"></textarea>
+                    <input type="file" @change="handleImageUpload" accept="image/*" class="mb-3">
+                    <div v-if="isAnalyzing" class="text-center py-2">
+                        <i class="bi bi-arrow-repeat loading-spinner"></i>
+                        Analyzing content...
+                    </div>
+                    <button @click="createPost" class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 clay-morphism">
+                        Post
+                    </button>
+                </div>
+            </div>
+
+            <!-- Feed -->
+            <div class="space-y-6">
+                <div v-for="post in posts" :key="post._id" class="clay-morphism p-4">
+                    <div class="flex items-center mb-3">
+                        <div class="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
+                        <div>
+                            <p class="font-semibold">{{post.username}}</p>
+                            <p class="text-sm text-gray-500">{{post.timestamp}}</p>
+                        </div>
+                    </div>
+                    <img v-if="post.image" :src="post.image" class="w-full h-64 object-cover rounded-lg mb-3">
+                    <p class="mb-3">{{post.caption}}</p>
+                    <div class="flex items-center space-x-4">
+                        <button @click="likePost(post)" class="flex items-center space-x-1">
+                            <i :class="['bi', post.liked ? 'bi-heart-fill text-red-500' : 'bi-heart']"></i>
+                            <span>{{post.likes}}</span>
+                        </button>
+                        <button class="flex items-center space-x-1">
+                            <i class="bi bi-chat"></i>
+                            <span>{{post.comments.length}}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    isRegistering: false,
+                    showCreatePost: false,
+                    isAnalyzing: false,
+                    loginForm: {
+                        email: '',
+                        password: ''
+                    },
+                    registerForm: {
+                        username: '',
+                        email: '',
+                        password: ''
+                    },
+                    newPost: {
+                        caption: '',
+                        image: null
+                    },
+                    currentUser: null,
+                    posts: []
+                }
+            },
+            mounted() {
+                this.loadPosts()
+            },
+            methods: {
+                async login() {
+                    // Simulate login
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: 'safepost-123456',
+                                action: 'read',
+                                collection: 'users',
+                                conditions: this.loginForm
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.result && data.result.length > 0) {
+                            this.currentUser = data.result[0]
+                            this.isLoggedIn = true
+                            this.loadPosts()
+                        } else {
+                            alert('Invalid credentials')
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error)
+                    }
+                },
+                async register() {
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: 'safepost-123456',
+                                action: 'create',
+                                collection: 'users',
+                                data: this.registerForm
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            this.isRegistering = false
+                            alert('Registration successful! Please login.')
+                        }
+                    } catch (error) {
+                        console.error('Registration error:', error)
+                    }
+                },
+                logout() {
+                    this.isLoggedIn = false
+                    this.currentUser = null
+                },
+                async handleImageUpload(event) {
+                    const file = event.target.files[0]
+                    if (file) {
+                        this.newPost.image = await this.getBase64(file)
+                    }
+                },
+                getBase64(file) {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader()
+                        reader.readAsDataURL(file)
+                        reader.onload = () => resolve(reader.result)
+                        reader.onerror = error => reject(error)
+                    })
+                },
+                async createPost() {
+                    this.isAnalyzing = true
+                    try {
+                        // First analyze the content
+                        const aiResponse = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/ai', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messages: [{
+                                    role: 'user',
+                                    content: [
+                                        { type: 'text', text: `Analyze this content for harmful content: ${this.newPost.caption}` },
+                                        this.newPost.image ? {
+                                            type: 'image_url',
+                                            image_url: { url: this.newPost.image }
+                                        } : null
+                                    ].filter(Boolean)
+                                }]
+                            })
+                        })
+                        const aiData = await aiResponse.json()
+                        
+                        if (!aiData.message.includes('harmful')) {
+                            // If content is safe, create the post
+                            const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    appSlug: 'safepost-123456',
+                                    action: 'create',
+                                    collection: 'posts',
+                                    data: {
+                                        ...this.newPost,
+                                        username: this.currentUser.username,
+                                        timestamp: new Date().toISOString(),
+                                        likes: 0,
+                                        comments: []
+                                    }
+                                })
+                            })
+                            const data = await response.json()
+                            if (data.success) {
+                                this.showCreatePost = false
+                                this.newPost = { caption: '', image: null }
+                                this.loadPosts()
+                            }
+                        } else {
+                            alert('Harmful content detected. Post cannot be created.')
+                        }
+                    } catch (error) {
+                        console.error('Post creation error:', error)
+                    }
+                    this.isAnalyzing = false
+                },
+                async loadPosts() {
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: 'safepost-123456',
+                                action: 'read',
+                                collection: 'posts'
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            this.posts = data.result.map(post => ({
+                                ...post,
+                                liked: false
+                            }))
+                        }
+                    } catch (error) {
+                        console.error('Load posts error:', error)
+                    }
+                },
+                async likePost(post) {
+                    try {
+                        const newLikes = post.liked ? post.likes - 1 : post.likes + 1
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer cR0B7wyVLcbjtIyuwRyQp7R3y2r2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: 'safepost-123456',
+                                action: 'update',
+                                collection: 'posts',
+                                id: post._id,
+                                data: { likes: newLikes }
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            post.liked = !post.liked
+                            post.likes = newLikes
+                        }
+                    } catch (error) {
+                        console.error('Like post error:', error)
+                    }
+                }
+            }
+        }).mount('#app')
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
